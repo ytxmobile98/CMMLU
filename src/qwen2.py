@@ -1,18 +1,45 @@
+# qwen2.py
 import os
 import torch
 import numpy as np
 import argparse
+import requests
+import json
 from mp_utils import choices, format_example, gen_prompt, softmax, run_eval
 from tqdm import tqdm
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.generation import GenerationConfig
 
+# nebulacoder
+# url = "http://172.27.221.13:48000/v1/chat/completions"
+# model_name = "nebulacoder"
+
+# qwen1.5-14b-chat
+# url = "http://172.27.221.13:9002/v1/chat/completions"
+# model_name = "Qwen1.5-14B-Chat"
+
+# qwen2
+# url = "http://172.27.33.107:8000/v1/chat/completions"
+# model_name = "code-free"
+
+# qwen2-huawei
+# url = "http://172.29.188.2:8000/v1/chat/completions"
+# model_name = "qwen"
+
+# telechat
+url = "http://172.27.221.13:9001/v1/chat/completions"
+model_name = "TeleChat-12B"
+
+MODEL_DIR = "/data/models/TeleChat-12B"
+SAVE_DIR = f"../results/{os.path.basename(MODEL_DIR)}"
+
 
 def is_eval_success(args) -> bool:
     """judege if eval task is success by checking the result dir"""
     subjects = sorted(
-        [f.split(".csv")[0] for f in os.listdir(os.path.join(args.data_dir, "test/"))]
+        [f.split(".csv")[0]
+         for f in os.listdir(os.path.join(args.data_dir, "test/"))]
     )
     abs_save_dir = f"{args.save_dir}_{args.num_few_shot}_shot"
     if not os.path.exists(abs_save_dir):
@@ -27,16 +54,34 @@ def is_eval_success(args) -> bool:
 
 def init_model(args):
     """Initialize models"""
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name_or_path,
-        trust_remote_code=True,
-        device_map="auto",
-        torch_dtype=torch.float16,
-    )
-    model.generation_config = GenerationConfig.from_pretrained(
-        args.model_name_or_path, trust_remote_code=True
-    )
-    return model
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     args.model_name_or_path,
+    #     trust_remote_code=True,
+    #     device_map="auto",
+    #     torch_dtype=torch.float16,
+    # )
+    # model.generation_config = GenerationConfig.from_pretrained(
+    #     args.model_name_or_path, trust_remote_code=True
+    # )
+    # return model
+
+    return None  # 不再返回本地模型
+
+# 调用服务端接口进行推理
+
+
+def remote_predict(prompt, max_tokens=512):
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens
+    }
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    # print("response: ", response.json(), "\n\n")
+    print("response: ", response)
+    return response.json()['choices'][0]['message']['content']
+    # return response.json().get("response")
 
 
 def eval(model, tokenizer, subject, dev_df, test_df, num_few_shot, max_length, cot):
@@ -47,7 +92,8 @@ def eval(model, tokenizer, subject, dev_df, test_df, num_few_shot, max_length, c
     answers = choices[: test_df.shape[1] - 2]
 
     for i in range(test_df.shape[0]):
-        prompt_end = format_example(test_df, i, subject, include_answer=False, cot=cot)
+        prompt_end = format_example(
+            test_df, i, subject, include_answer=False, cot=cot)
         prompt = gen_prompt(
             dev_df=dev_df,
             subject=subject,
@@ -59,20 +105,28 @@ def eval(model, tokenizer, subject, dev_df, test_df, num_few_shot, max_length, c
         )
         label = test_df.iloc[i, test_df.shape[1] - 1]
 
-        with torch.no_grad():
-            input_ids = tokenizer([prompt], padding=False)["input_ids"]
-            input_ids = torch.tensor(input_ids, device=model.device)
-            logits = model(input_ids)["logits"]
-            last_token_logits = logits[:, -1, :]
-            if last_token_logits.dtype in {torch.bfloat16, torch.float16}:
-                last_token_logits = last_token_logits.to(dtype=torch.float32)
-            choice_logits = last_token_logits[:, choice_ids].detach().cpu().numpy()
-            conf = softmax(choice_logits[0])[choices.index(label)]
-            pred = {0: "A", 1: "B", 2: "C", 3: "D"}[np.argmax(choice_logits[0])]
+        # with torch.no_grad():
+        #     input_ids = tokenizer([prompt], padding=False)["input_ids"]
+        #     input_ids = torch.tensor(input_ids, device=model.device)
+        #     logits = model(input_ids)["logits"]
+        #     last_token_logits = logits[:, -1, :]
+        #     if last_token_logits.dtype in {torch.bfloat16, torch.float16}:
+        #         last_token_logits = last_token_logits.to(dtype=torch.float32)
+        #     choice_logits = last_token_logits[:, choice_ids].detach().cpu().numpy()
+        #     conf = softmax(choice_logits[0])[choices.index(label)]
+        #     pred = {0: "A", 1: "B", 2: "C", 3: "D"}[np.argmax(choice_logits[0])]
+        #
+        # all_preds += pred
+        # all_conf.append(conf)
+        # cors.append(pred == label)
 
-        all_preds += pred
-        all_conf.append(conf)
-        cors.append(pred == label)
+        # 通过 HTTP 调用远程服务
+        pred = remote_predict(prompt, max_tokens=max_length)
+        print("pred:", pred)
+
+        if pred and pred[0] in choices:
+            cors.append(pred[0] == label)
+        all_preds.append(pred.replace("\n", ""))
 
     acc = np.mean(cors)
     print("Average accuracy {:.3f} - {}".format(acc, subject))
@@ -90,7 +144,8 @@ def eval_instruct(
     answers = choices[: test_df.shape[1] - 2]
 
     for i in tqdm(range(test_df.shape[0])):
-        prompt_end = format_example(test_df, i, subject, include_answer=False, cot=cot)
+        prompt_end = format_example(
+            test_df, i, subject, include_answer=False, cot=cot)
         prompt = gen_prompt(
             dev_df=dev_df,
             subject=subject,
@@ -109,13 +164,15 @@ def eval_instruct(
         )
         model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-        generated_ids = model.generate(model_inputs.input_ids, max_new_tokens=512)
+        generated_ids = model.generate(
+            model_inputs.input_ids, max_new_tokens=512)
         generated_ids = [
-            output_ids[len(input_ids) :]
+            output_ids[len(input_ids):]
             for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
         ]
 
-        pred = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        pred = tokenizer.batch_decode(
+            generated_ids, skip_special_tokens=True)[0]
         # pred, history = model.chat(tokenizer, prompt, history=None)
 
         if pred and pred[0] in choices:
@@ -134,9 +191,9 @@ def eval_instruct(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name_or_path", type=str, default="")
+    parser.add_argument("--model_name_or_path", type=str, default=MODEL_DIR)
     parser.add_argument("--data_dir", type=str, default="../data")
-    parser.add_argument("--save_dir", type=str, default="../results/Qwen2-7B-Chat")
+    parser.add_argument("--save_dir", type=str, default=SAVE_DIR)
     parser.add_argument("--num_few_shot", type=int, default=0)
     parser.add_argument("--max_length", type=int, default=2048)
     parser.add_argument("--cot", action="store_true")
@@ -151,7 +208,9 @@ if __name__ == "__main__":
     else:
         model = init_model(args)
 
-    if "instruct" in args.model_name_or_path.lower():
-        run_eval(model, tokenizer, eval_instruct, args)
-    else:
-        run_eval(model, tokenizer, eval, args)
+    run_eval(model, tokenizer, eval, args)
+
+    # if "instruct" in args.model_name_or_path.lower():
+    #     run_eval(model, tokenizer, eval_instruct, args)
+    # else:
+    #     run_eval(model, tokenizer, eval, args)

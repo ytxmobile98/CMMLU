@@ -248,7 +248,7 @@ def run_test(dev_df, test_df, test_item, model_name, model_key="", num_few_shot=
     resp_hist, id_hist, resp_dir = create_or_load_data("../results", model_name+f"/{num_few_shot}_shot", resp_file)
     resp_dict = {}
     with open(os.path.join(resp_dir, resp_file), mode='a', encoding='utf8') as f:
-        filename = os.path.join('../data/test/',f'{test_item}.csv')
+        filename = os.path.join('../data/test_bak3/', f'{test_item}.csv')
         with open(filename,'r',encoding=u'utf-8') as csvfile:
             csvreader = csv.reader(csvfile)
             #跳过表头
@@ -366,7 +366,7 @@ if __name__ == '__main__':
     model_key = "http://123.249.36.167:19203"
     model_hyparam = {"max_length": 4096, "top_p": 0.8, "top_k": 30, "repetition_penalty": 1.2, "temperature": 0.05}
     t1 = time.time()
-    for root, dirs, files in os.walk('../data/test'):
+    for root, dirs, files in os.walk('../data/test_bak3'):
         for i in files:
             item = i.replace(".csv","")
             dev_df = pd.read_csv(os.path.join(args.data_dir, "dev", item + ".csv"), header=0, index_col=0)
