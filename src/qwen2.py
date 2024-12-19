@@ -15,10 +15,6 @@ from transformers.generation import GenerationConfig
 # url = "http://172.27.221.13:48000/v1/chat/completions"
 # model_name = "nebulacoder"
 
-# qwen1.5-14b-chat
-# url = "http://172.27.221.13:9002/v1/chat/completions"
-# model_name = "Qwen1.5-14B-Chat"
-
 # qwen2
 # url = "http://172.27.33.107:8000/v1/chat/completions"
 # model_name = "code-free"
@@ -67,10 +63,11 @@ def init_model(args):
 
     return None  # 不再返回本地模型
 
-# 调用服务端接口进行推理
-
 
 def remote_predict(prompt, max_tokens=512):
+    """
+    调用服务端接口进行推理
+    """
     headers = {'Content-Type': 'application/json'}
     data = {
         "model": model_name,
