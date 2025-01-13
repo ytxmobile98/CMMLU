@@ -11,8 +11,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.generation import GenerationConfig
 
 # qwen1.5-14b-chat
-url = "http://172.27.221.13:9002/v1/chat/completions"
-model_name = "Qwen1.5-14B-Chat"
+# url = "http://172.27.221.13:9002/v1/chat/completions"
+# model_name = "Qwen1.5-14B-Chat"
+
+# Baichuan-13B-Chat
+url = "http://172.27.33.60:9004/v1/chat/completions"
+model_name = "Baichuan-13B-Chat"
 
 MODEL_DIR = f"/data/models/{model_name}"
 SAVE_DIR = f"../results/{model_name}"
