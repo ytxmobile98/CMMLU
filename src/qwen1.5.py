@@ -15,8 +15,12 @@ from transformers.generation import GenerationConfig
 # model_name = "Qwen1.5-14B-Chat"
 
 # Baichuan-13B-Chat
-url = "http://172.27.33.60:9004/v1/chat/completions"
-model_name = "Baichuan-13B-Chat"
+# url = "http://172.27.33.60:9004/v1/chat/completions"
+# model_name = "Baichuan-13B-Chat"
+
+# Huawei Shengteng 910b
+url = "http://127.0.0.1:11025/v1/chat/completions"
+model_name = "llama-tokenizer"
 
 MODEL_DIR = f"/data/models/{model_name}"
 SAVE_DIR = f"../results/{model_name}"
@@ -72,7 +76,7 @@ def remote_predict(prompt, max_tokens=512):
 
 
 def eval(model, tokenizer, subject, dev_df, test_df, num_few_shot, max_length, cot):
-    choice_ids = [tokenizer(choice)["input_ids"][0] for choice in choices]
+    # choice_ids = [tokenizer(choice)["input_ids"][0] for choice in choices]
     cors = []
     all_conf = []
     all_preds = []
@@ -190,7 +194,7 @@ if __name__ == "__main__":
         args.model_name_or_path, trust_remote_code=True
     )
     if is_eval_success(args):
-        # eval finished, no need load model anymore, just show the result
+        # eval finished, no need to load model anymore, just show the result
         model = None
     else:
         model = init_model(args)
